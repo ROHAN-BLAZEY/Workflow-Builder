@@ -144,41 +144,111 @@
             review: 2
         };
 
-        // State Store containing initial layout cards to demonstrate immediate assembly flow
-        let tasks = [
-            { id: 1, title: "Draft high-fidelity marketing wireframes", stage: "backlog", priority: "Low" },
-            { id: 2, title: "Refactor database index patterns", stage: "todo", priority: "High" },
-            { id: 3, title: "Write unified authentication API engine", stage: "in_progress", priority: "High" },
-            { id: 4, title: "Patch edge-case login timeout loophole", stage: "in_progress", priority: "Medium" },
-            { id: 5, title: "Audit localized accessibility styling configs", stage: "review", priority: "Low" }
-        ];
+        let tasks = [];
 
-        // --- PIPELINE MANIPULATION ENGINES ---
+        // --- API COMMUNICATION ENGINES ---
+        
+        async function fetchTasks() {
+            try {
+                const response = await fetch('/api/tasks');
+                tasks = await response.json();
+                renderPipeline();
+            } catch (error) {
+                console.error("Failed to load tasks:", error);
+            }
+        }
+
+        async function shiftTask(taskId, directionalShift) {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const currentStageIndex = STAGES.indexOf(task.stage);
+            const newStageIndex = currentStageIndex + directionalShift;
+            
+            if (newStageIndex >= 0 && newStageIndex < STAGES.length) {
+                const newStage = STAGES[newStageIndex];
+                
+                // Optimistic UI update
+                task.stage = newStage;
+                renderPipeline();
+
+                // Backend sync
+                try {
+                    await fetch(`/api/tasks/${taskId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ stage: newStage })
+                    });
+                } catch (error) {
+                    console.error("Failed to update task:", error);
+                    fetchTasks(); // Revert on failure
+                }
+            }
+        }
+
+        async function addNewTask() {
+            const inputElement = document.getElementById('task-title-input');
+            const priorityElement = document.getElementById('task-priority-input');
+            const title = inputElement.value.trim();
+
+            if (!title) return alert("Please clarify a target work-item title descriptor!");
+
+            try {
+                const response = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        title: title, 
+                        priority: priorityElement.value 
+                    })
+                });
+                
+                const newTask = await response.json();
+                tasks.push(newTask);
+                inputElement.value = '';
+                renderPipeline();
+            } catch (error) {
+                console.error("Failed to create task:", error);
+            }
+        }
+
+        async function purgeTask(taskId) {
+            // Optimistic UI update
+            tasks = tasks.filter(t => t.id !== taskId);
+            renderPipeline();
+
+            // Backend sync
+            try {
+                await fetch(`/api/tasks/${taskId}`, {
+                    method: 'DELETE'
+                });
+            } catch (error) {
+                console.error("Failed to delete task:", error);
+                fetchTasks(); // Revert on failure
+            }
+        }
+
+        // --- DOM RENDER ENGINE ---
         
         function renderPipeline() {
-            // Setup blank canvas dictionaries for each separate block segment
             const containers = {};
             const counters = {};
             let activeBottlenecksCount = 0;
 
             STAGES.forEach(stage => {
                 containers[stage] = document.getElementById(`cards-${stage}`);
-                containers[stage].innerHTML = ''; // Sanitize old DOM objects
+                containers[stage].innerHTML = ''; 
                 counters[stage] = 0;
             });
 
-            // Iterate state arrays and inject modular component code
             tasks.forEach(task => {
                 counters[task.stage]++;
                 
-                // Assign matching style badges based on selected state priority tags
                 let badgeColor = "bg-slate-100 text-slate-600";
                 if(task.priority === 'Medium') badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
                 if(task.priority === 'High') badgeColor = "bg-rose-50 text-rose-700 border-rose-200";
 
                 const currentStageIndex = STAGES.indexOf(task.stage);
-
-                // Build action button configurations based on location rules inside array indices
                 const showLeftButton = currentStageIndex > 0;
                 const showRightButton = currentStageIndex < STAGES.length - 1;
 
@@ -209,7 +279,6 @@
                 `;
             });
 
-            // Update Counter metrics and audit columns for active bottlenecks
             STAGES.forEach(stage => {
                 const countLabel = document.getElementById(`count-${stage}`);
                 const columnWrapper = document.getElementById(`col-${stage}`);
@@ -217,8 +286,6 @@
                 if (WIP_LIMITS[stage]) {
                     countLabel.innerText = `${counters[stage]} / ${WIP_LIMITS[stage]}`;
                     
-                    // BOTTLENECK RULE CHECK ENGINE: 
-                    // Highlighting occurs when the column volume surpasses defined structural WIP constraints.
                     if (counters[stage] > WIP_LIMITS[stage]) {
                         columnWrapper.classList.remove('bg-slate-100', 'border-transparent');
                         columnWrapper.classList.add('bg-rose-50', 'border-rose-300', 'bottleneck-alert');
@@ -232,53 +299,13 @@
                 }
             });
 
-            // Render live analytics metrics at top bar header display components
             document.getElementById('metric-bottlenecks').innerText = activeBottlenecksCount;
             document.getElementById('metric-inflight').innerText = tasks.filter(t => t.stage !== 'done').length;
             document.getElementById('metric-done').innerText = counters['done'];
         }
 
-        // Action routing to systematically push items across arrays left or right
-        function shiftTask(taskId, directionalShift) {
-            const indexTarget = tasks.findIndex(t => t.id === taskId);
-            if (indexTarget !== -1) {
-                const currentStageIndex = STAGES.indexOf(tasks[indexTarget].stage);
-                const completeNewTargetIndex = currentStageIndex + directionalShift;
-                
-                if (completeNewTargetIndex >= 0 && completeNewTargetIndex < STAGES.length) {
-                    tasks[indexTarget].stage = STAGES[completeNewTargetIndex];
-                    renderPipeline();
-                }
-            }
-        }
-
-        // Push new record entries inside structural array schemas
-        function addNewTask() {
-            const inputElement = document.getElementById('task-title-input');
-            const priorityElement = document.getElementById('task-priority-input');
-
-            if (!inputElement.value.trim()) return alert("Please clarify a target work-item title descriptor!");
-
-            const payloadTask = {
-                id: Date.now(), // Unique timeline identifier mapping index entries
-                title: inputElement.value.trim(),
-                stage: 'backlog',
-                priority: priorityElement.value
-            };
-
-            tasks.push(payloadTask);
-            inputElement.value = ''; // Flush target entry UI states
-            renderPipeline();
-        }
-
-        // Remove item out of live runtime pipeline architectures completely
-        function purgeTask(taskId) {
-            tasks = tasks.filter(t => t.id !== taskId);
-            renderPipeline();
-        }
-
         // Initialize target UI structures instantly on document mount routine steps
-        document.addEventListener('DOMContentLoaded', renderPipeline);
+        document.addEventListener('DOMContentLoaded', fetchTasks);
     </script>
 </body>
 </html>
