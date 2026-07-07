@@ -139,7 +139,7 @@
         const STAGES = ['backlog', 'todo', 'in_progress', 'review', 'done'];
         
         // Strict Work-In-Progress (WIP) parameters to calculate bottlenecks
-        const WIP_LIMITS = {
+        const LIMITS = {
             in_progress: 3,
             review: 2
         };
@@ -283,10 +283,10 @@
                 const countLabel = document.getElementById(`count-${stage}`);
                 const columnWrapper = document.getElementById(`col-${stage}`);
                 
-                if (WIP_LIMITS[stage]) {
-                    countLabel.innerText = `${counters[stage]} / ${WIP_LIMITS[stage]}`;
+                if (LIMITS[stage]) {
+                    countLabel.innerText = `${counters[stage]} / ${LIMITS[stage]}`;
                     
-                    if (counters[stage] > WIP_LIMITS[stage]) {
+                    if (counters[stage] > LIMITS[stage]) {
                         columnWrapper.classList.remove('bg-slate-100', 'border-transparent');
                         columnWrapper.classList.add('bg-rose-50', 'border-rose-300', 'bottleneck-alert');
                         activeBottlenecksCount++;
