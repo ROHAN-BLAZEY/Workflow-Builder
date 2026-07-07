@@ -6,6 +6,9 @@ import time
 # Initialize FastAPI app
 app = FastAPI(title="PipelineSim API")
 
+# --- Mock In-Memory Database Initialization ---
+tasks_db: List[dict] = []
+
 # --- Pydantic Models for Data Validation ---
 class Task(BaseModel):
     id: int
