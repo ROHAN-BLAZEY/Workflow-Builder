@@ -134,17 +134,100 @@
         </div>
     </main>
 
+    <!-- UPDATED JAVASCRIPT: Connects to FastAPI Backend -->
     <script>
-        // State Management - Completely cleared of preset tasks
-        let tasks = [];
-        
-        const limits = {
-            in_progress: 4,
-            review: 3
-        };
+        // API Base URL (Change port if your FastAPI runs elsewhere)
+        const API_URL = "http://127.0.0.1:8000/api/tasks";
 
+        // Global State
+        let tasks = [];
+        const limits = { in_progress: 4, review: 3 };
         const stages = ['backlog', 'todo', 'in_progress', 'review', 'done'];
 
+        // --- 1. Fetch Tasks from Python Backend ---
+        async function fetchTasks() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error("Failed to fetch tasks");
+                tasks = await response.json();
+                renderBoard();
+            } catch (error) {
+                console.error("API Error:", error);
+            }
+        }
+
+        // --- 2. Add New Task via API ---
+        async function addNewTask() {
+            const titleInput = document.getElementById('task-title-input');
+            const priorityInput = document.getElementById('task-priority-input');
+
+            if (!titleInput.value.trim()) return alert("Please specify a work item title descriptor.");
+
+            const payload = {
+                title: titleInput.value.trim(),
+                priority: priorityInput.value
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    titleInput.value = ''; // Clear input
+                    fetchTasks(); // Refresh board
+                }
+            } catch (error) {
+                console.error("Error creating task:", error);
+            }
+        }
+
+        // --- 3. Move Task (Update Stage) via API ---
+        async function moveTask(id, direction) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+
+            const currentIdx = stages.indexOf(task.stage);
+            const targetIdx = currentIdx + direction;
+
+            if (targetIdx >= 0 && targetIdx < stages.length) {
+                const targetStage = stages[targetIdx];
+
+                // Enforce WIP Limits
+                if (direction > 0 && limits[targetStage]) {
+                    const targetCount = tasks.filter(t => t.stage === targetStage).length;
+                    if (targetCount >= limits[targetStage]) {
+                        return alert(`Pipeline Stalled! '${targetStage}' is at full capacity (${limits[targetStage]} items).`);
+                    }
+                }
+
+                // Call Backend PUT
+                try {
+                    await fetch(`${API_URL}/${id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ stage: targetStage })
+                    });
+                    fetchTasks(); // Refresh state from server
+                } catch (error) {
+                    console.error("Error updating task:", error);
+                }
+            }
+        }
+
+        // --- 4. Delete Task via API ---
+        async function deleteTask(id) {
+            try {
+                await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+                fetchTasks();
+            } catch (error) {
+                console.error("Error deleting task:", error);
+            }
+        }
+
+        // --- 5. Render Logic (Same as before, visual only) ---
         function renderBoard() {
             stages.forEach(stage => {
                 const container = document.getElementById(`cards-${stage}`);
@@ -152,11 +235,9 @@
                 
                 const stageTasks = tasks.filter(t => t.stage === stage);
                 
-                // Update specific column count displays
+                // Update counts & Visual Bottleneck Alerts
                 if (limits[stage]) {
                     document.getElementById(`count-${stage}`).innerText = `${stageTasks.length} / ${limits[stage]}`;
-                    
-                    // Manage structural visual indicators for capacity alerts
                     const columnElement = document.getElementById(`col-${stage}`);
                     if (stageTasks.length >= limits[stage]) {
                         columnElement.classList.add('border-red-400', 'bg-red-50/30', 'bottleneck-alert');
@@ -167,4 +248,52 @@
                     document.getElementById(`count-${stage}`).innerText = stageTasks.length;
                 }
 
-                // Append Task Card Modules dynamically
+                // Render Cards
+                stageTasks.forEach(task => {
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group flex flex-col gap-2.5 relative";
+                    
+                    let priorityColor = "bg-slate-100 text-slate-600";
+                    if (task.priority === "High") priorityColor = "bg-red-50 text-red-600 border border-red-100";
+                    if (task.priority === "Medium") priorityColor = "bg-amber-50 text-amber-600 border border-amber-100";
+
+                    const currentIdx = stages.indexOf(stage);
+
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start gap-2">
+                            <span class="text-2xs font-extrabold uppercase px-2 py-0.5 rounded ${priorityColor}">${task.priority}</span>
+                            <button onclick="deleteTask(${task.id})" class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition absolute top-3.5 right-3.5">
+                                <span class="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                        </div>
+                        <p class="text-sm font-semibold tracking-tight text-slate-700 pr-4 leading-tight">${task.title}</p>
+                        <div class="flex justify-between mt-1 pt-2 border-t border-slate-50">
+                            <button onclick="moveTask(${task.id}, -1)" ${currentIdx === 0 ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 flex items-center justify-center p-1 rounded hover:bg-slate-50">
+                                <span class="material-symbols-outlined text-md">arrow_back</span>
+                            </button>
+                            <button onclick="moveTask(${task.id}, 1)" ${currentIdx === stages.length - 1 ? 'disabled' : ''} class="text-slate-400 hover:text-indigo-600 disabled:opacity-20 flex items-center justify-center p-1 rounded hover:bg-slate-50">
+                                <span class="material-symbols-outlined text-md">arrow_forward</span>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            });
+            calculateMetrics();
+        }
+
+        function calculateMetrics() {
+            const bottlenecks = stages.filter(stage => limits[stage] && tasks.filter(t => t.stage === stage).length >= limits[stage]).length;
+            const inflight = tasks.filter(t => t.stage !== 'done').length;
+            const done = tasks.filter(t => t.stage === 'done').length;
+
+            document.getElementById('metric-bottlenecks').innerText = bottlenecks;
+            document.getElementById('metric-inflight').innerText = inflight;
+            document.getElementById('metric-done').innerText = done;
+        }
+
+        // Initial Load
+        fetchTasks();
+    </script>
+</body>
+</html>
