@@ -20,15 +20,6 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     stage: str
 
-# --- In-Memory State (Database Mock) ---
-tasks_db = [
-    { "id": 1, "title": "Draft high-fidelity marketing wireframes", "stage": "backlog", "priority": "Low" },
-    { "id": 2, "title": "Refactor database index patterns", "stage": "todo", "priority": "High" },
-    { "id": 3, "title": "Write unified authentication API engine", "stage": "in_progress", "priority": "High" },
-    { "id": 4, "title": "Patch edge-case login timeout loophole", "stage": "in_progress", "priority": "Medium" },
-    { "id": 5, "title": "Audit localized accessibility styling configs", "stage": "review", "priority": "Low" }
-]
-
 # --- API Endpoints ---
 
 @app.get("/api/tasks", response_model=List[Task])
