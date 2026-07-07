@@ -72,7 +72,7 @@
     </section>
 
     <main class="flex-1 overflow-x-auto p-6 pt-0">
-        <div class="max-w-7xl mx-auto h-full grid grid-cols-1 md:grid-cols-5 gap-4 Items-start min-w-[1000px]">
+        <div class="max-w-7xl mx-auto h-full grid grid-cols-1 md:grid-cols-5 gap-4 items-start min-w-[1000px]">
             
             <div id="col-backlog" class="bg-slate-100 rounded-2xl border border-slate-200 p-4 flex flex-col max-h-[70vh]">
                 <div class="flex justify-between items-center mb-3">
@@ -102,7 +102,7 @@
                         <span class="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span>
                         <h3 class="font-extrabold text-slate-700 text-sm uppercase tracking-wide">In Progress</h3>
                     </div>
-                    <span id="count-in_progress" class="bg-indigo-100 text-indigo-700 font-bold text-xs px-2 py-0.5 rounded-full">0 / 3</span>
+                    <span id="count-in_progress" class="bg-indigo-100 text-indigo-700 font-bold text-xs px-2 py-0.5 rounded-full">0 / 4</span>
                 </div>
                 <p class="text-[10px] text-slate-400 font-semibold mb-3">Limit: 4 Items</p>
                 <div id="cards-in_progress" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
@@ -114,7 +114,7 @@
                         <span class="w-2.5 h-2.5 bg-purple-500 rounded-full"></span>
                         <h3 class="font-extrabold text-slate-700 text-sm uppercase tracking-wide">Review</h3>
                     </div>
-                    <span id="count-review" class="bg-purple-100 text-purple-700 font-bold text-xs px-2 py-0.5 rounded-full">0 / 2</span>
+                    <span id="count-review" class="bg-purple-100 text-purple-700 font-bold text-xs px-2 py-0.5 rounded-full">0 / 3</span>
                 </div>
                 <p class="text-[10px] text-slate-400 font-semibold mb-3">Limit: 3 Items</p>
                 <div id="cards-review" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
@@ -126,7 +126,7 @@
                         <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
                         <h3 class="font-extrabold text-slate-700 text-sm uppercase tracking-wide">Done</h3>
                     </div>
-                    <span id="count-done" class="bg-emerald-100 text-emerald-700 font-bold text-xs px-2 py-0.5 rounded-full">0</span>
+                    <span id="count-done" class="bg-slate-200 text-slate-600 font-bold text-xs px-2 py-0.5 rounded-full">0</span>
                 </div>
                 <div id="cards-done" class="space-y-3 overflow-y-auto flex-1 pr-1"></div>
             </div>
@@ -135,177 +135,36 @@
     </main>
 
     <script>
-        // Pipeline Stage Configuration Definition
-        const STAGES = ['backlog', 'todo', 'in_progress', 'review', 'done'];
+        // State Management - Completely cleared of preset tasks
+        let tasks = [];
         
-        // Strict Work-In-Progress (WIP) parameters to calculate bottlenecks
-        const LIMITS = {
-            in_progress: 3,
-            review: 2
+        const limits = {
+            in_progress: 4,
+            review: 3
         };
 
-        let tasks = [];
+        const stages = ['backlog', 'todo', 'in_progress', 'review', 'done'];
 
-        // --- API COMMUNICATION ENGINES ---
-        
-        async function fetchTasks() {
-            try {
-                const response = await fetch('/api/tasks');
-                tasks = await response.json();
-                renderPipeline();
-            } catch (error) {
-                console.error("Failed to load tasks:", error);
-            }
-        }
-
-        async function shiftTask(taskId, directionalShift) {
-            const task = tasks.find(t => t.id === taskId);
-            if (!task) return;
-
-            const currentStageIndex = STAGES.indexOf(task.stage);
-            const newStageIndex = currentStageIndex + directionalShift;
-            
-            if (newStageIndex >= 0 && newStageIndex < STAGES.length) {
-                const newStage = STAGES[newStageIndex];
+        function renderBoard() {
+            stages.forEach(stage => {
+                const container = document.getElementById(`cards-${stage}`);
+                container.innerHTML = '';
                 
-                // Optimistic UI update
-                task.stage = newStage;
-                renderPipeline();
-
-                // Backend sync
-                try {
-                    await fetch(`/api/tasks/${taskId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ stage: newStage })
-                    });
-                } catch (error) {
-                    console.error("Failed to update task:", error);
-                    fetchTasks(); // Revert on failure
-                }
-            }
-        }
-
-        async function addNewTask() {
-            const inputElement = document.getElementById('task-title-input');
-            const priorityElement = document.getElementById('task-priority-input');
-            const title = inputElement.value.trim();
-
-            if (!title) return alert("Please clarify a target work-item title descriptor!");
-
-            try {
-                const response = await fetch('/api/tasks', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        title: title, 
-                        priority: priorityElement.value 
-                    })
-                });
+                const stageTasks = tasks.filter(t => t.stage === stage);
                 
-                const newTask = await response.json();
-                tasks.push(newTask);
-                inputElement.value = '';
-                renderPipeline();
-            } catch (error) {
-                console.error("Failed to create task:", error);
-            }
-        }
-
-        async function purgeTask(taskId) {
-            // Optimistic UI update
-            tasks = tasks.filter(t => t.id !== taskId);
-            renderPipeline();
-
-            // Backend sync
-            try {
-                await fetch(`/api/tasks/${taskId}`, {
-                    method: 'DELETE'
-                });
-            } catch (error) {
-                console.error("Failed to delete task:", error);
-                fetchTasks(); // Revert on failure
-            }
-        }
-
-        // --- DOM RENDER ENGINE ---
-        
-        function renderPipeline() {
-            const containers = {};
-            const counters = {};
-            let activeBottlenecksCount = 0;
-
-            STAGES.forEach(stage => {
-                containers[stage] = document.getElementById(`cards-${stage}`);
-                containers[stage].innerHTML = ''; 
-                counters[stage] = 0;
-            });
-
-            tasks.forEach(task => {
-                counters[task.stage]++;
-                
-                let badgeColor = "bg-slate-100 text-slate-600";
-                if(task.priority === 'Medium') badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
-                if(task.priority === 'High') badgeColor = "bg-rose-50 text-rose-700 border-rose-200";
-
-                const currentStageIndex = STAGES.indexOf(task.stage);
-                const showLeftButton = currentStageIndex > 0;
-                const showRightButton = currentStageIndex < STAGES.length - 1;
-
-                containers[task.stage].innerHTML += `
-                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition hover:shadow-md flex flex-col gap-3">
-                        <div>
-                            <span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded border ${badgeColor}">${task.priority} Priority</span>
-                            <h4 class="text-sm font-bold text-slate-800 mt-2 leading-snug">${task.title}</h4>
-                        </div>
-                        <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-1">
-                            <button onclick="purgeTask(${task.id})" class="text-slate-400 hover:text-rose-500 transition flex items-center">
-                                <span class="material-symbols-outlined text-lg">delete</span>
-                            </button>
-                            <div class="flex gap-1">
-                                ${showLeftButton ? `
-                                    <button onclick="shiftTask(${task.id}, -1)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-lg transition flex items-center">
-                                        <span class="material-symbols-outlined text-sm font-bold">arrow_back</span>
-                                    </button>
-                                ` : ''}
-                                ${showRightButton ? `
-                                    <button onclick="shiftTask(${task.id}, 1)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 p-1.5 rounded-lg transition flex items-center">
-                                        <span class="material-symbols-outlined text-sm font-bold">arrow_forward</span>
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-
-            STAGES.forEach(stage => {
-                const countLabel = document.getElementById(`count-${stage}`);
-                const columnWrapper = document.getElementById(`col-${stage}`);
-                
-                if (LIMITS[stage]) {
-                    countLabel.innerText = `${counters[stage]} / ${LIMITS[stage]}`;
+                // Update specific column count displays
+                if (limits[stage]) {
+                    document.getElementById(`count-${stage}`).innerText = `${stageTasks.length} / ${limits[stage]}`;
                     
-                    if (counters[stage] > LIMITS[stage]) {
-                        columnWrapper.classList.remove('bg-slate-100', 'border-transparent');
-                        columnWrapper.classList.add('bg-rose-50', 'border-rose-300', 'bottleneck-alert');
-                        activeBottlenecksCount++;
+                    // Manage structural visual indicators for capacity alerts
+                    const columnElement = document.getElementById(`col-${stage}`);
+                    if (stageTasks.length >= limits[stage]) {
+                        columnElement.classList.add('border-red-400', 'bg-red-50/30', 'bottleneck-alert');
                     } else {
-                        columnWrapper.classList.remove('bg-rose-50', 'border-rose-300', 'bottleneck-alert');
-                        columnWrapper.classList.add('bg-slate-100', 'border-transparent');
+                        columnElement.classList.remove('border-red-400', 'bg-red-50/30', 'bottleneck-alert');
                     }
                 } else {
-                    countLabel.innerText = counters[stage];
+                    document.getElementById(`count-${stage}`).innerText = stageTasks.length;
                 }
-            });
 
-            document.getElementById('metric-bottlenecks').innerText = activeBottlenecksCount;
-            document.getElementById('metric-inflight').innerText = tasks.filter(t => t.stage !== 'done').length;
-            document.getElementById('metric-done').innerText = counters['done'];
-        }
-
-        // Initialize target UI structures instantly on document mount routine steps
-        document.addEventListener('DOMContentLoaded', fetchTasks);
-    </script>
-</body>
-</html>
+                // Append Task Card Modules dynamically
