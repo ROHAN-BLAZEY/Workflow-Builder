@@ -1,0 +1,10 @@
+{
+  "name": "Now or Never - Task, Timetable & Productivity Planner",
+  "description": "Now or Never 3-column task system featuring Need to Do, Should Do, and Can Do columns, sequential column duration allotment timer, interactive daily timetable, Google Maps grounded commute and travel workflow planner, works calendar, and velocity analytics.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Now or Never - Task & Timetable Planner",
+  "short_name": "Now or Never",
+  "description": "3-column task system with Need to Do, Should Do, and Can Do columns, sequential allotment countdown timer, interactive daily timetable, and velocity analytics.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
