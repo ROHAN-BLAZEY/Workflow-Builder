@@ -131,6 +131,76 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         )}
 
         <div className="space-y-3 pt-2">
+          {/* Cloud Sync section */}
+          <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200">
+             <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-xl bg-sky-600 text-white flex items-center justify-center">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-sm text-sky-900">Cloud Sync Code</p>
+                  <p className="text-[10px] text-sky-700">Enter a code to sync across devices (e.g. 123456)</p>
+                </div>
+             </div>
+             <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  id="sync-code-input"
+                  placeholder="Enter Sync Code..."
+                  className="flex-1 bg-white border border-sky-200 rounded-xl px-3 py-2 text-sm text-sky-900 font-bold uppercase placeholder:text-sky-300 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  defaultValue={typeof window !== 'undefined' ? localStorage.getItem('non_sync_code_v1') || '' : ''}
+                />
+                <button 
+                  onClick={async () => {
+                     const input = document.getElementById('sync-code-input') as HTMLInputElement;
+                     const code = input.value.trim().toUpperCase();
+                     if (!code) {
+                        localStorage.removeItem('non_sync_code_v1');
+                        setSuccessMsg('Sync disabled.');
+                        return;
+                     }
+                     localStorage.setItem('non_sync_code_v1', code);
+                     setSuccessMsg('Sync code saved! Pulling data...');
+                     
+                     // Import pullFromCloud dynamically to avoid circular dep if needed, but we can just use fetch
+                     try {
+                        const res = await fetch(`/api/sync/pull?code=${encodeURIComponent(code)}`);
+                        const json = await res.json();
+                        if (json.success && json.data) {
+                           onRestoreData({
+                              tasks: json.data.tasks,
+                              columns: json.data.columns,
+                              timetableEntries: json.data.timetable
+                           });
+                           setSuccessMsg('Cloud data synced successfully!');
+                        } else {
+                           // If no data, we push our current data
+                           fetch('/api/sync/push', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                 syncCode: code,
+                                 data: { tasks, columns, timetable: timetableEntries }
+                              })
+                           });
+                           setSuccessMsg('Created new sync profile!');
+                        }
+                     } catch(e) {
+                        setErrorMsg('Cloud sync failed.');
+                     }
+                  }}
+                  className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-colors"
+                >
+                  Sync
+                </button>
+             </div>
+          </div>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+            <div className="relative flex justify-center"><span className="bg-white px-2 text-[10px] text-slate-400 font-bold uppercase">Or use local file</span></div>
+          </div>
+
           {/* Export button */}
           <button
             onClick={handleExport}
@@ -179,7 +249,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
         <div className="text-center pt-2 border-t border-slate-100">
           <p className="text-[11px] text-slate-400">
-            100% private. Stored locally on your device with zero cloud server tracking required.
+            Files are 100% private. Cloud Sync requires Vercel KV enabled.
           </p>
         </div>
 

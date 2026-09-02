@@ -445,6 +445,57 @@ Ensure the tone is direct, analytical, highly actionable, and focused on maximiz
 });
 
 
+// Cloud Sync Endpoints (Vercel KV)
+app.post('/api/sync/push', async (req, res) => {
+  try {
+    const { syncCode, data } = req.body;
+    if (!syncCode || !data) {
+      return res.status(400).json({ error: 'Missing syncCode or data' });
+    }
+
+    const { kv } = await import('@vercel/kv');
+    
+    // Check if KV is configured
+    if (!process.env.KV_REST_API_URL) {
+       return res.status(500).json({ 
+         error: 'Vercel KV not configured', 
+         message: 'Please enable Vercel KV in your Vercel project dashboard.' 
+       });
+    }
+
+    // Save payload to Redis (expires in 30 days to save space)
+    await kv.set(`sync:${syncCode.toUpperCase()}`, data, { ex: 60 * 60 * 24 * 30 });
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('Push Sync Error:', err);
+    return res.status(500).json({ error: 'Sync failed', message: err?.message });
+  }
+});
+
+app.get('/api/sync/pull', async (req, res) => {
+  try {
+    const syncCode = req.query.code as string;
+    if (!syncCode) {
+      return res.status(400).json({ error: 'Missing sync code' });
+    }
+
+    const { kv } = await import('@vercel/kv');
+
+    if (!process.env.KV_REST_API_URL) {
+      return res.status(500).json({ 
+        error: 'Vercel KV not configured', 
+        message: 'Please enable Vercel KV in your Vercel project dashboard.' 
+      });
+    }
+
+    const data = await kv.get(`sync:${syncCode.toUpperCase()}`);
+    return res.json({ success: true, data: data || null });
+  } catch (err: any) {
+    console.error('Pull Sync Error:', err);
+    return res.status(500).json({ error: 'Sync failed', message: err?.message });
+  }
+});
+
 // Vite middleware setup
 async function start() {
   if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {

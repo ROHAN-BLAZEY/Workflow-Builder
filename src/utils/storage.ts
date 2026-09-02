@@ -115,6 +115,63 @@ export const STORAGE_KEYS = {
   LANGUAGE: 'non_language_pref_v1',
   THEME: 'non_theme_pref_v1',
   CUSTOM_PRESETS: 'non_custom_presets_v1',
+  SYNC_CODE: 'non_sync_code_v1',
+};
+
+export function getSyncCode(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(STORAGE_KEYS.SYNC_CODE);
+}
+
+export function setSyncCode(code: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (code) {
+    localStorage.setItem(STORAGE_KEYS.SYNC_CODE, code.toUpperCase());
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.SYNC_CODE);
+  }
+}
+
+let syncTimeout: any = null;
+export function triggerCloudSync() {
+  if (typeof window === 'undefined') return;
+  const code = getSyncCode();
+  if (!code) return;
+  
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(async () => {
+    try {
+      const data = {
+        tasks: loadTasksFromStorage(),
+        columns: loadColumnsFromStorage(),
+        timetable: loadTimetableFromStorage(),
+      };
+      await fetch('/api/sync/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncCode: code, data })
+      });
+    } catch (e) {
+      console.error('Failed to push to cloud', e);
+    }
+  }, 2000); // 2 second debounce
+}
+
+export const pullFromCloud = async (code: string): Promise<boolean> => {
+  try {
+    const res = await fetch(`/api/sync/pull?code=${encodeURIComponent(code)}`);
+    const json = await res.json();
+    if (json.success && json.data) {
+      if (json.data.tasks) saveTasksToStorage(json.data.tasks, true);
+      if (json.data.columns) saveColumnsToStorage(json.data.columns, true);
+      if (json.data.timetable) saveTimetableToStorage(json.data.timetable, true);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error('Failed to pull from cloud', e);
+    return false;
+  }
 };
 
 export function loadTasksFromStorage(): Task[] {
@@ -122,7 +179,7 @@ export function loadTasksFromStorage(): Task[] {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.TASKS);
     if (!data) {
-      saveTasksToStorage([]);
+      saveTasksToStorage([], true);
       return [];
     }
     return JSON.parse(data);
@@ -131,10 +188,11 @@ export function loadTasksFromStorage(): Task[] {
   }
 }
 
-export function saveTasksToStorage(tasks: Task[]): void {
+export function saveTasksToStorage(tasks: Task[], skipSync = false): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+    if (!skipSync) triggerCloudSync();
   } catch (e) {
     console.error('Failed to persist tasks', e);
   }
@@ -145,7 +203,7 @@ export function loadColumnsFromStorage(): ColumnConfig[] {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.COLUMNS);
     if (!data) {
-      saveColumnsToStorage(DEFAULT_COLUMNS);
+      saveColumnsToStorage(DEFAULT_COLUMNS, true);
       return DEFAULT_COLUMNS;
     }
     const parsed = JSON.parse(data);
@@ -158,10 +216,11 @@ export function loadColumnsFromStorage(): ColumnConfig[] {
   }
 }
 
-export function saveColumnsToStorage(columns: ColumnConfig[]): void {
+export function saveColumnsToStorage(columns: ColumnConfig[], skipSync = false): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEYS.COLUMNS, JSON.stringify(columns));
+    if (!skipSync) triggerCloudSync();
   } catch (e) {
     console.error('Failed to persist columns', e);
   }
@@ -172,7 +231,7 @@ export function loadTimetableFromStorage(): TimetableEntry[] {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.TIMETABLE);
     if (data === null) {
-      saveTimetableToStorage(DEFAULT_TIMETABLE_ENTRIES);
+      saveTimetableToStorage(DEFAULT_TIMETABLE_ENTRIES, true);
       return DEFAULT_TIMETABLE_ENTRIES;
     }
     const parsed = JSON.parse(data);
@@ -182,10 +241,11 @@ export function loadTimetableFromStorage(): TimetableEntry[] {
   }
 }
 
-export function saveTimetableToStorage(entries: TimetableEntry[]): void {
+export function saveTimetableToStorage(entries: TimetableEntry[], skipSync = false): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEYS.TIMETABLE, JSON.stringify(entries));
+    if (!skipSync) triggerCloudSync();
   } catch (e) {
     console.error('Failed to persist timetable', e);
   }
