@@ -203,9 +203,9 @@ export const TravelPlannerView: React.FC<TravelPlannerViewProps> = ({
       (err) => {
         console.warn('Geolocation failed:', err);
         setIsLocating(false);
-        setErrorMsg('Unable to retrieve GPS coordinates. Please enter your starting location manually.');
+        setErrorMsg('Unable to retrieve GPS coordinates. Ensure Location Permissions are enabled for this app.');
       },
-      { timeout: 8000 }
+      { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
     );
   };
 

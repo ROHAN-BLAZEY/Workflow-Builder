@@ -87,47 +87,8 @@ export default function App() {
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [customPresets, setCustomPresets] = useState<RoutinePreset[]>([]);
 
-  // Task Focus Timer interval effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (activeTimer.isRunning && activeTimer.taskId) {
-      interval = setInterval(() => {
-        setActiveTimer((prev) => {
-          if (prev.secondsRemaining <= 1) {
-            // Timer expired!
-            soundManager.playTimerAlarm();
-            
-            // Auto update actualMinutes for this task
-            setTasks((curTasks) =>
-              curTasks.map((t) =>
-                t.id === prev.taskId
-                  ? {
-                      ...t,
-                      actualMinutes: (t.actualMinutes || 0) + Math.round(prev.initialSeconds / 60),
-                    }
-                  : t
-              )
-            );
-
-            return {
-              ...prev,
-              secondsRemaining: 0,
-              isRunning: false,
-            };
-          }
-          return {
-            ...prev,
-            secondsRemaining: prev.secondsRemaining - 1,
-          };
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [activeTimer.isRunning, activeTimer.taskId]);
+  // Task Focus Timer interval effect (Moved to ActiveTimerBar to prevent global re-renders!)
+  // This completely eliminates the 1s UI glitching across the app.
 
   // Persist tasks whenever they change
   useEffect(() => {
@@ -565,6 +526,18 @@ export default function App() {
         onStop={handleStopTimer}
         onAddFiveMinutes={handleAddFiveMinutes}
         onCompleteTask={handleToggleComplete}
+        onTimerExpired={(taskId, initialSeconds) => {
+          soundManager.playTimerAlarm();
+          triggerHaptic([100, 100, 100, 100, 500, 200, 500]);
+          setTasks((curTasks) =>
+            curTasks.map((t) =>
+              t.id === taskId
+                ? { ...t, actualMinutes: (t.actualMinutes || 0) + Math.round(initialSeconds / 60) }
+                : t
+            )
+          );
+          setActiveTimer(prev => ({ ...prev, secondsRemaining: 0, isRunning: false }));
+        }}
       />
 
       {/* Mobile Bottom Navigation Bar */}

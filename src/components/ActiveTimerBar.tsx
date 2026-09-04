@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Pause, Square, Check, Clock, Plus, Bell } from 'lucide-react';
 import { ActiveTimerState, Task } from '../types';
 import { formatSecondsToDigital } from '../utils/dateUtils';
+import { soundManager } from '../utils/audio';
+import { triggerHaptic } from '../utils/haptics';
 
 interface ActiveTimerBarProps {
   timer: ActiveTimerState;
@@ -10,6 +12,8 @@ interface ActiveTimerBarProps {
   onStop: () => void;
   onAddFiveMinutes: () => void;
   onCompleteTask: (taskId: string) => void;
+  onTick?: (newSeconds: number) => void;
+  onTimerExpired: (taskId: string, initialSeconds: number) => void;
 }
 
 export const ActiveTimerBar: React.FC<ActiveTimerBarProps> = ({
@@ -19,11 +23,37 @@ export const ActiveTimerBar: React.FC<ActiveTimerBarProps> = ({
   onStop,
   onAddFiveMinutes,
   onCompleteTask,
+  onTick,
+  onTimerExpired
 }) => {
+  const [localSeconds, setLocalSeconds] = useState(timer.secondsRemaining);
+
+  // Sync local seconds when timer prop changes significantly (like +5 mins)
+  useEffect(() => {
+    setLocalSeconds(timer.secondsRemaining);
+  }, [timer.secondsRemaining, timer.taskId]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (timer.isRunning && timer.taskId) {
+      interval = setInterval(() => {
+        setLocalSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            onTimerExpired(timer.taskId!, timer.initialSeconds);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timer.isRunning, timer.taskId, timer.initialSeconds, onTimerExpired]);
+
   if (!timer.taskId || !task) return null;
 
   const totalSecs = timer.initialSeconds || (task.estimatedMinutes * 60);
-  const progressPct = totalSecs > 0 ? Math.max(0, Math.min(100, ((totalSecs - timer.secondsRemaining) / totalSecs) * 100)) : 0;
+  const progressPct = totalSecs > 0 ? Math.max(0, Math.min(100, ((totalSecs - localSeconds) / totalSecs) * 100)) : 0;
 
   const getBadgeColor = () => {
     if (task.columnId === 'need') return 'bg-rose-500 text-white';
@@ -32,13 +62,16 @@ export const ActiveTimerBar: React.FC<ActiveTimerBarProps> = ({
   };
 
   return (
-    <div className="fixed bottom-16 sm:bottom-4 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+    <div 
+      className="fixed left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
+      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4.5rem)' }}
+    >
       <div className="p-3.5 sm:p-4 rounded-2xl border border-slate-800 shadow-2xl bg-slate-900/95 backdrop-blur-md text-white flex flex-col gap-2.5">
         
         {/* Progress line */}
         <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
           <div 
-            className="h-full bg-indigo-500 transition-all duration-1000"
+            className="h-full bg-indigo-500 transition-all duration-1000 linear"
             style={{ width: `${progressPct}%` }}
           />
         </div>
@@ -63,7 +96,7 @@ export const ActiveTimerBar: React.FC<ActiveTimerBarProps> = ({
 
           {/* Time digits */}
           <div className="font-mono text-xl sm:text-2xl font-bold tracking-tight text-white shrink-0 px-2.5 py-1 bg-slate-950 rounded-lg border border-slate-800">
-            {formatSecondsToDigital(timer.secondsRemaining)}
+            {formatSecondsToDigital(localSeconds)}
           </div>
 
           {/* Controls */}
@@ -77,7 +110,10 @@ export const ActiveTimerBar: React.FC<ActiveTimerBarProps> = ({
             </button>
 
             <button
-              onClick={onAddFiveMinutes}
+              onClick={() => {
+                setLocalSeconds(s => s + 300);
+                onAddFiveMinutes();
+              }}
               title="+5 minutes"
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 active:scale-95 transition-all text-xs font-mono font-bold border border-slate-700"
             >

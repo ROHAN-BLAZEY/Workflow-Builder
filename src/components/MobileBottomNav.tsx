@@ -20,7 +20,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   language = 'en',
 }) => {
   return (
-    <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1 shadow-lg w-full">
+    <nav 
+      aria-label="Mobile Navigation" 
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1 shadow-lg w-full"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.25rem)' }}
+    >
       <div className="flex items-center justify-around max-w-md mx-auto">
         
         {/* Now or Never (3 Columns) */}
